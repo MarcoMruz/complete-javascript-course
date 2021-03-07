@@ -74,57 +74,221 @@ const currencies = new Map([
 const movements = [200, 450, -400, 3000, -650, -130, 70, 1300];
 
 /////////////////////////////////////////////////
+const createUsernames = accs =>
+  accs.forEach(acc => {
+    acc.username = acc.owner
+      .toLowerCase()
+      .split(' ')
+      .map(name => name[0])
+      .join('');
+  });
 
-function displayMovements(movements) {
+createUsernames(accounts);
+
+function displayMovements(movements, sort = false) {
   containerMovements.innerHTML = '';
 
-  return movements
-    .map((mov, i) => {
-      const type = mov > 0 ? 'deposit' : 'withdrawal';
+  const movs = sort ? movements.slice().sort((a, b) => b - a) : movements;
 
-      return `<div class="movements__row">
-              <div class="movements__type movements__type--${type}">${
-        i + 1
-      } ${type}</div>
-              <div class="movements__value">${mov}</div>
-            </div>`;
-    })
-    .join('');
-}
+  containerMovements.insertAdjacentHTML(
+    'afterbegin',
+    movs
+      .map((mov, i) => {
+        const type = mov > 0 ? 'deposit' : 'withdrawal';
 
-containerMovements.insertAdjacentHTML(
-  'afterbegin',
-  displayMovements(account1.movements)
-);
-
-/* 
-Julia and Kate are doing a study on dogs. So each of them asked 5 dog owners about their dog's age, and stored the data into an array (one array for each). For now, they are just interested in knowing whether a dog is an adult or a puppy. A dog is an adult if it is at least 3 years old, and it's a puppy if it's less than 3 years old.
-
-Create a function 'checkDogs', which accepts 2 arrays of dog's ages ('dogsJulia' and 'dogsKate'), and does the following things:
-
-1. Julia found out that the owners of the FIRST and the LAST TWO dogs actually have cats, not dogs! So create a shallow copy of Julia's array, and remove the cat ages from that copied array (because it's a bad practice to mutate function parameters)
-2. Create an array with both Julia's (corrected) and Kate's data
-3. For each remaining dog, log to the console whether it's an adult ("Dog number 1 is an adult, and is 5 years old") or a puppy ("Dog number 2 is still a puppy 🐶")
-4. Run the function for both test datasets
-
-HINT: Use tools from all lectures in this section so far 😉
-
-TEST DATA 1: Julia's data [3, 5, 2, 12, 7], Kate's data [4, 1, 15, 8, 3]
-TEST DATA 2: Julia's data [9, 16, 6, 8, 3], Kate's data [10, 5, 6, 1, 4]
-
-GOOD LUCK 😀
-*/
-
-function checkDogs(dogsJulia, dogsKate) {
-  const correctedKate = dogsJulia.slice(1, 3);
-
-  const result = correctedKate.concat(dogsKate);
-
-  result.forEach((dog, i) =>
-    dog < 3
-      ? console.log(`Dog number ${i + 1} is puppy`)
-      : console.log(`Dog number ${i + 1} is adult`)
+        return `<div class="movements__row">
+                <div class="movements__type movements__type--${type}">${
+          i + 1
+        } ${type}</div>
+                <div class="movements__value">${mov}€</div>
+              </div>`;
+      })
+      .join('')
   );
 }
 
-checkDogs([3, 5, 2, 12, 7], [4, 1, 15, 8, 3]);
+const calcAndPrintBalance = acc => {
+  acc.balance = acc.movements.reduce((acc, mov) => acc + mov, 0);
+
+  labelBalance.textContent = `${acc.balance} €`;
+};
+
+const calcDisplaySummary = acc => {
+  const incomes = acc.movements
+    .filter(mov => mov > 0)
+    .reduce((acc, mov) => acc + mov);
+
+  const outcomes = acc.movements
+    .filter(mov => mov < 0)
+    .reduce((acc, mov) => acc + mov);
+
+  const interest = acc.movements
+    .filter(mov => mov > 0)
+    .map(deposit => (deposit * acc.interestRate) / 100)
+    .filter(int => int > 1)
+    .reduce((acc, int) => acc + int, 0);
+
+  labelSumIn.textContent = `${incomes}€`;
+  labelSumOut.textContent = `${Math.abs(outcomes)}€`;
+  labelSumInterest.textContent = `${interest}€`;
+};
+
+// Current logged user
+let currentAccount;
+
+btnLogin.addEventListener('click', event => {
+  event.preventDefault();
+
+  currentAccount = accounts.find(
+    acc => acc.username === inputLoginUsername.value
+  );
+
+  if (currentAccount?.pin === Number(inputLoginPin.value)) {
+    // Display UI and welcome messsage
+    labelWelcome.textContent = `Welcome back ${
+      currentAccount.owner.split(' ')[0]
+    }`;
+
+    containerApp.style.opacity = 100;
+
+    // Clear input fields
+    inputLoginPin.value = inputLoginUsername.value = '';
+    inputLoginPin.blur();
+
+    //Display movs, balance and summary
+    updateUI(currentAccount);
+  }
+});
+
+btnTransfer.addEventListener('click', event => {
+  event.preventDefault();
+
+  const amount = Number(inputTransferAmount.value);
+  const receiver = accounts.find(acc => acc.username === inputTransferTo.value);
+
+  if (
+    amount > 0 &&
+    receiver &&
+    currentAccount.balance >= amount &&
+    receiver?.username !== currentAccount.username
+  ) {
+    currentAccount.movements.push(-amount);
+    receiver.movements.push(amount);
+    updateUI(currentAccount);
+  }
+
+  inputTransferTo.value = inputTransferAmount.value = '';
+  inputTransferAmount.blur();
+});
+
+btnLoan.addEventListener('click', e => {
+  e.preventDefault();
+
+  const amount = inputLoanAmount.value;
+
+  if (amount > 0 && currentAccount.movements.some(mov => mov >= amount * 0.1)) {
+    currentAccount.movements.push(amount);
+    updateUI(currentAccount);
+  }
+
+  inputLoanAmount.value = '';
+  inputLoanAmount.blur();
+});
+
+btnClose.addEventListener('click', e => {
+  e.preventDefault();
+
+  inputClosePin.blur();
+
+  if (
+    inputCloseUsername.value === currentAccount.username &&
+    +inputClosePin.value === currentAccount.pin
+  ) {
+    const index = accounts.findIndex(
+      acc => acc.username === currentAccount.username
+    );
+
+    accounts.splice(index, 1);
+
+    containerApp.style.opacity = 0;
+  }
+  inputClosePin.value = inputCloseUsername.value = '';
+});
+
+let sortArr = false;
+
+btnSort.addEventListener('click', e => {
+  e.preventDefault();
+
+  displayMovements(currentAccount.movements, !sortArr);
+  sortArr = !sortArr;
+});
+
+function updateUI(currentAccount) {
+  displayMovements(currentAccount.movements);
+  calcAndPrintBalance(currentAccount);
+  calcDisplaySummary(currentAccount);
+}
+
+///////////////////////////////
+///////////////////////////////
+// Coding challenge
+
+const avgHumanYearsOfDogs = dogs => {
+  return dogs
+    .map(dog => (dog > 2 ? 16 + dog * 4 : dog * 2))
+    .filter(dog => dog >= 18)
+    .reduce((acc, curr, i, arr) => acc + curr / arr.length, 0);
+};
+
+console.log(avgHumanYearsOfDogs([5, 2, 4, 1, 15, 8, 3]));
+
+labelBalance.addEventListener('click', () => {
+  const movsUI = Array.from(
+    document.querySelectorAll('.movements__value'),
+    el => +el.textContent.replace('€', '')
+  );
+
+  console.log(movsUI);
+});
+
+const recommendedFood = dogs => {
+  return dogs.map(
+    dog => (dog.recommendedFood = Math.trunc(dog.weight ** 0.75 * 28))
+  );
+};
+
+const getOwnersDog = (dogs, ownerName) => {
+  return dogs.find(dog => dog.owners.includes(ownerName));
+};
+
+const dogs = [
+  { weight: 22, curFood: 250, owners: ['Alice', 'Bob'] },
+  { weight: 8, curFood: 200, owners: ['Matilda'] },
+  { weight: 13, curFood: 275, owners: ['Sarah', 'John'] },
+  { weight: 32, curFood: 340, owners: ['Michael'] },
+];
+
+recommendedFood(dogs);
+
+const ownersEatTooMuch = dogs
+  .filter(dog => dog.curFood > dog.recommendedFood)
+  .flatMap(dog => dog.owners);
+
+const ownersEatTooLittle = dogs
+  .filter(dog => dog.curFood < dog.recommendedFood)
+  .flatMap(dog => dog.owners);
+
+console.log(ownersEatTooMuch.join(' and ') + `'s dogs eat too much`);
+console.log(ownersEatTooLittle.join(' and ') + `'s dogs eat too little`);
+
+const okayAmountPredicate = dog =>
+  dog.curFood >= dog.recommendedFood * 0.9 &&
+  dog.curFood <= dog.recommendedFood * 1.1;
+console.log(dogs.some(okayAmountPredicate));
+
+console.log(dogs.some(dog => dog.curFood === dog.recommendedFood));
+
+console.log(dogs.filter(okayAmountPredicate));
+
+console.log([...dogs].sort((a, b) => a.recommendedFood - b.recommendedFood));
